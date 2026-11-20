@@ -1,0 +1,16 @@
+{
+  "name": "Zence's Lutong Ulam",
+  "short_name": "Lutong Ulam",
+  "description": "Filipino home-cooking guide and palengke cost estimator",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF7F2",
+  "theme_color": "#C2410C",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

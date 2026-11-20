@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512" role="img" aria-labelledby="title desc">
+  <title id="title">Zence's Lutong Ulam app icon</title>
+  <desc id="desc">A cream palayok soup bowl with steam and a green leaf on a terracotta rounded square.</desc>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#C2410C" stroke="#9A3412" stroke-width="3" />
+  <path d="M23 27c-4-4 3-6 0-11" fill="none" stroke="#FAF7F2" stroke-width="4" stroke-linecap="round" />
+  <path d="M32 27c-4-5 4-7 0-13" fill="none" stroke="#FAF7F2" stroke-width="4" stroke-linecap="round" />
+  <path d="M39 27c-3-4 3-6 0-10" fill="none" stroke="#FAF7F2" stroke-width="4" stroke-linecap="round" />
+  <path d="M43 22c4-7 11-7 12-6 .3 6-4 11-10 11-2 0-3-2-2-5Z" fill="#4ADE80" stroke="#16A34A" stroke-width="2" stroke-linejoin="round" />
+  <path d="M43 28c3-4 6-6 10-8" fill="none" stroke="#16A34A" stroke-width="2" stroke-linecap="round" />
+  <rect x="9" y="32" width="46" height="11" rx="5.5" fill="#FAF7F2" />
+  <path d="M13 40h38c-2 9-9 15-19 15S15 49 13 40Z" fill="#FAF7F2" />
+</svg>
