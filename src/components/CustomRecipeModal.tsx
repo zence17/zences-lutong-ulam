@@ -5,8 +5,14 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent 
 import { Camera, Plus, Trash2, X } from "lucide-react";
 import { getIngredientById, ingredientList } from "@/data/ingredients";
 import { useCustomRecipes } from "@/hooks/useCustomRecipes";
+import { usePriceOverrides } from "@/hooks/usePriceOverrides";
 import { compressRecipePhoto } from "@/lib/imageCompressor";
-import { calculateRecipeCost, formatAmount, formatPHP } from "@/lib/costCalculator";
+import {
+  calculateRecipeCost,
+  formatAmount,
+  formatPHP,
+  resolveIngredient,
+} from "@/lib/costCalculator";
 import type { Recipe, RecipeCategory, RecipeIngredient } from "@/types/recipe";
 
 interface CustomRecipeModalProps {
@@ -51,6 +57,7 @@ function parseServings(value: string): number | null {
 
 export function CustomRecipeModal({ isOpen, onClose }: CustomRecipeModalProps) {
   const { addCustomRecipe } = useCustomRecipes();
+  const { overrides } = usePriceOverrides();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const errorSummaryRef = useRef<HTMLDivElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -186,11 +193,11 @@ export function CustomRecipeModal({ isOpen, onClose }: CustomRecipeModalProps) {
     };
 
     try {
-      return calculateRecipeCost(draftRecipe, servings);
+      return calculateRecipeCost(draftRecipe, servings, "palengke", overrides);
     } catch {
       return null;
     }
-  }, [baseServings, category, cookTimeMins, draftIngredients, prepTimeMins, tagline, tipidTip, title]);
+  }, [baseServings, category, cookTimeMins, draftIngredients, overrides, prepTimeMins, tagline, tipidTip, title]);
 
   function resetForm() {
     photoRequestRef.current += 1;
@@ -476,7 +483,7 @@ export function CustomRecipeModal({ isOpen, onClose }: CustomRecipeModalProps) {
 
           <div className="mt-2 grid gap-3">
             {ingredientRows.map((row, index) => {
-              const selected = getIngredientById(row.ingredientId);
+              const selected = resolveIngredient(row.ingredientId, overrides);
 
               return (
                 <div key={row.id} className="rounded-2xl border border-charcoal/10 bg-white p-3">
@@ -506,7 +513,7 @@ export function CustomRecipeModal({ isOpen, onClose }: CustomRecipeModalProps) {
                         <option value="">Choose ingredient…</option>
                         {ingredientList.map((ingredient) => (
                           <option key={ingredient.id} value={ingredient.id}>
-                            {ingredient.name} — {formatPHP(ingredient.pricePerUnit, { forceDecimals: true })}/{ingredient.unit}
+                            {ingredient.name} — {formatPHP(resolveIngredient(ingredient.id, overrides)?.pricePerUnit ?? ingredient.pricePerUnit, { forceDecimals: true })}/{ingredient.unit}
                           </option>
                         ))}
                       </select>

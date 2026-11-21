@@ -1,8 +1,11 @@
+import type { PriceOverrides } from "@/lib/costCalculator";
+
 export const STORAGE_KEYS = {
   customRecipes: "zences_lutong_ulam_custom_recipes",
   mealPlan: "zences_lutong_ulam_meal_plan",
   savedSlugs: "zences_lutong_ulam_saved",
   priceSource: "zences_lutong_ulam_price_source",
+  priceOverrides: "zences_lutong_ulam_price_overrides",
 } as const;
 
 export const SYNC_EVENTS = {
@@ -10,6 +13,7 @@ export const SYNC_EVENTS = {
   mealPlan: "meal-plan-updated",
   savedSlugs: "saved-ulam-updated",
   priceSource: "price-source-updated",
+  priceOverrides: "price-overrides-updated",
 } as const;
 
 export interface ZenceBackupPayload {
@@ -21,6 +25,7 @@ export interface ZenceBackupPayload {
     mealPlan?: unknown;
     savedSlugs?: unknown;
     priceSource?: unknown;
+    priceOverrides?: unknown;
   };
 }
 
@@ -74,6 +79,19 @@ function collectCustomSlugs(value: unknown): string[] {
 
 function sanitizeSavedSlugs(value: unknown[]): string[] {
   return [...new Set(value.filter((slug): slug is string => typeof slug === "string"))];
+}
+
+export function sanitizePriceOverrides(value: unknown): PriceOverrides {
+  if (!isRecord(value)) return {};
+
+  const sanitized: PriceOverrides = {};
+  for (const [ingredientId, price] of Object.entries(value)) {
+    if (typeof price === "number" && Number.isFinite(price) && price > 0) {
+      sanitized[ingredientId] = Math.round((price + Number.EPSILON) * 100) / 100;
+    }
+  }
+
+  return sanitized;
 }
 
 function buildWrites(data: Record<string, unknown>): BackupWrite[] {
@@ -143,6 +161,20 @@ function buildWrites(data: Record<string, unknown>): BackupWrite[] {
     });
   }
 
+  if (data.priceOverrides !== undefined) {
+    const overrides = sanitizePriceOverrides(data.priceOverrides);
+    writes.push({
+      key: STORAGE_KEYS.priceOverrides,
+      value: JSON.stringify(overrides),
+      label: "palengke price overrides",
+      dispatch: () => {
+        window.dispatchEvent(
+          new CustomEvent(SYNC_EVENTS.priceOverrides, { detail: { overrides } }),
+        );
+      },
+    });
+  }
+
   return writes;
 }
 
@@ -154,11 +186,13 @@ export function exportBackupJson(): void {
   const mealPlan = readStoredValue(STORAGE_KEYS.mealPlan);
   const savedSlugs = readStoredValue(STORAGE_KEYS.savedSlugs);
   const priceSource = readStoredValue(STORAGE_KEYS.priceSource);
+  const priceOverrides = readStoredValue(STORAGE_KEYS.priceOverrides);
 
   if (customRecipes !== undefined) data.customRecipes = customRecipes;
   if (mealPlan !== undefined) data.mealPlan = mealPlan;
   if (savedSlugs !== undefined) data.savedSlugs = savedSlugs;
   if (priceSource !== undefined) data.priceSource = priceSource;
+  if (priceOverrides !== undefined) data.priceOverrides = sanitizePriceOverrides(priceOverrides);
 
   const now = new Date();
   const payload: ZenceBackupPayload = {

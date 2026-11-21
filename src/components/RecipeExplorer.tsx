@@ -5,6 +5,7 @@ import { Heart, Search } from "lucide-react";
 import { CustomRecipeModal } from "@/components/CustomRecipeModal";
 import { getIngredientById, ingredients } from "@/data/ingredients";
 import { useCustomRecipes } from "@/hooks/useCustomRecipes";
+import { usePriceOverrides } from "@/hooks/usePriceOverrides";
 import { usePriceSource } from "@/hooks/usePriceSource";
 import { SAVED_ULAM_FILTER_EVENT, useSavedUlam } from "@/hooks/useSavedUlam";
 import {
@@ -92,6 +93,7 @@ export function RecipeExplorer({ recipes }: { recipes: Recipe[] }) {
   const [sortAnnouncement, setSortAnnouncement] = useState("");
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const { priceSource, isSupermarket } = usePriceSource();
+  const { overrides } = usePriceOverrides();
   const { savedSlugs, savedCount, isHydrated } = useSavedUlam();
   const { customRecipes } = useCustomRecipes();
 
@@ -125,8 +127,14 @@ export function RecipeExplorer({ recipes }: { recipes: Recipe[] }) {
   const indexedRecipes = useMemo(
     () =>
       allRecipes.map((recipe, index) => {
-        const cost = calculateRecipeCost(recipe, recipe.baseServings, priceSource);
-        const refMatch = calculateRefMatch(recipe, ownedIngredientIds, recipe.baseServings, priceSource);
+        const cost = calculateRecipeCost(recipe, recipe.baseServings, priceSource, overrides);
+        const refMatch = calculateRefMatch(
+          recipe,
+          ownedIngredientIds,
+          recipe.baseServings,
+          priceSource,
+          overrides,
+        );
         const ingredientNames = recipe.ingredients
           .map((item) => getIngredientById(item.ingredientId)?.name ?? "")
           .join(" ");
@@ -139,7 +147,7 @@ export function RecipeExplorer({ recipes }: { recipes: Recipe[] }) {
           index,
         };
       }),
-    [allRecipes, ownedIngredientIds, priceSource],
+    [allRecipes, overrides, ownedIngredientIds, priceSource],
   );
 
   const visibleRecipes = useMemo(() => {

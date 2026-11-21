@@ -14,6 +14,7 @@ import {
 import { CopyListButton } from "@/components/CopyListButton";
 import { useCustomRecipes } from "@/hooks/useCustomRecipes";
 import { useMealPlan } from "@/hooks/useMealPlan";
+import { usePriceOverrides } from "@/hooks/usePriceOverrides";
 import { usePriceSource } from "@/hooks/usePriceSource";
 import {
   DAYS_OF_WEEK,
@@ -65,6 +66,7 @@ export default function MealPlanClient({ recipes }: MealPlanClientProps) {
     isHydrated,
   } = useMealPlan(allRecipes);
   const { priceSource, isSupermarket } = usePriceSource();
+  const { overrides, overrideCount } = usePriceOverrides();
 
   const [checkedIngredients, setCheckedIngredients] = useState<Set<string>>(
     () => new Set<string>(),
@@ -80,14 +82,14 @@ export default function MealPlanClient({ recipes }: MealPlanClientProps) {
   const groceryHeadingId = `${uid}-grocery-heading`;
 
   const weekly = useMemo(
-    () => calculateWeeklyPlan(plan, servings, priceSource, allRecipes),
-    [allRecipes, plan, priceSource, servings],
+    () => calculateWeeklyPlan(plan, servings, priceSource, allRecipes, overrides),
+    [allRecipes, overrides, plan, priceSource, servings],
   );
 
   const recipeCostById = useMemo(() => {
     const entries = allRecipes.map((recipe): [string, RecipeCostOption] => {
-      const cost = calculateRecipeCost(recipe, recipe.baseServings, priceSource);
-      const householdCost = calculateRecipeCost(recipe, servings, priceSource);
+      const cost = calculateRecipeCost(recipe, recipe.baseServings, priceSource, overrides);
+      const householdCost = calculateRecipeCost(recipe, servings, priceSource, overrides);
       return [
         recipe.slug,
         {
@@ -98,7 +100,7 @@ export default function MealPlanClient({ recipes }: MealPlanClientProps) {
       ];
     });
     return new Map(entries);
-  }, [allRecipes, priceSource, servings]);
+  }, [allRecipes, overrides, priceSource, servings]);
 
   const recipeOptionsByCategory = useMemo(() => {
     const groups = new Map<RecipeCategory, Recipe[]>();
@@ -181,6 +183,11 @@ export default function MealPlanClient({ recipes }: MealPlanClientProps) {
             {isSupermarket ? (
               <p className="mt-2 text-xs font-semibold text-adobo">
                 Supermarket estimate active: +15% over palengke reference prices.
+              </p>
+            ) : null}
+            {overrideCount > 0 ? (
+              <p className="mt-2 text-xs font-semibold text-calamansi">
+                Using {overrideCount} of your palengke price{overrideCount === 1 ? "" : "s"}.
               </p>
             ) : null}
           </div>
@@ -477,6 +484,7 @@ export default function MealPlanClient({ recipes }: MealPlanClientProps) {
                   [...checkedIngredients],
                   priceSource,
                   allRecipes,
+                  overrides,
                 )
               }
               label={isSupermarket ? "Copy Supermarket List" : "Copy Palengke List"}

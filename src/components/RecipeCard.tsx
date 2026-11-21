@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, Clock, Heart } from "lucide-react";
+import { usePriceOverrides } from "@/hooks/usePriceOverrides";
 import { usePriceSource } from "@/hooks/usePriceSource";
 import { useSavedUlam } from "@/hooks/useSavedUlam";
 import { calculateRecipeCost, calculateRefMatch, formatPHP } from "@/lib/costCalculator";
@@ -17,8 +18,15 @@ export function RecipeCard({
   ownedIngredientIds?: string[];
 }) {
   const { priceSource, isSupermarket } = usePriceSource();
-  const cost = calculateRecipeCost(recipe, recipe.baseServings, priceSource);
-  const refMatch = calculateRefMatch(recipe, ownedIngredientIds, recipe.baseServings, priceSource);
+  const { overrides } = usePriceOverrides();
+  const cost = calculateRecipeCost(recipe, recipe.baseServings, priceSource, overrides);
+  const refMatch = calculateRefMatch(
+    recipe,
+    ownedIngredientIds,
+    recipe.baseServings,
+    priceSource,
+    overrides,
+  );
   const totalTime = recipe.prepTimeMins + recipe.cookTimeMins;
   const { isSaved, toggleSaved, isHydrated } = useSavedUlam();
   const saved = isSaved(recipe.slug);

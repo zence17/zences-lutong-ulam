@@ -1,10 +1,22 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Clock, Heart, Lightbulb, Minus, Plus, RotateCcw, ShoppingBasket, Wallet } from "lucide-react";
+import { useId, useMemo, useState } from "react";
+import {
+  ArrowLeftRight,
+  Clock,
+  Heart,
+  Lightbulb,
+  Minus,
+  Plus,
+  RotateCcw,
+  ShoppingBasket,
+  Wallet,
+} from "lucide-react";
 import { CopyListButton } from "@/components/CopyListButton";
 import { KitchenTimer } from "@/components/KitchenTimer";
-import { priceMetadata as defaultPriceMetadata } from "@/data/ingredients";
+import { getIngredientById, priceMetadata as defaultPriceMetadata } from "@/data/ingredients";
+import { INGREDIENT_SUBSTITUTIONS } from "@/data/substitutions";
+import { usePriceOverrides } from "@/hooks/usePriceOverrides";
 import { usePriceSource } from "@/hooks/usePriceSource";
 import { useSavedUlam } from "@/hooks/useSavedUlam";
 import {
@@ -12,6 +24,8 @@ import {
   formatAmount,
   formatPHP,
   formatRecipePalengkeText,
+  roundToTwoDecimals,
+  scaleAmount,
 } from "@/lib/costCalculator";
 import type { Recipe } from "@/types/recipe";
 
@@ -35,11 +49,66 @@ export function RecipeDetailClient({
 }: RecipeDetailClientProps) {
   const [servings, setServings] = useState(recipe.baseServings);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set());
+  const [activeSwaps, setActiveSwaps] = useState<Record<string, string>>({});
+  const swapIdPrefix = useId();
   const { priceSource, isSupermarket } = usePriceSource();
-  const cost = useMemo(
-    () => calculateRecipeCost(recipe, servings, priceSource),
-    [priceSource, recipe, servings],
+  const { overrides, overrideCount } = usePriceOverrides();
+
+  const effectiveRecipe = useMemo<Recipe>(
+    () => ({
+      ...recipe,
+      ingredients: recipe.ingredients.map((ingredient) => {
+        const substituteId = activeSwaps[ingredient.ingredientId];
+        if (!substituteId) return ingredient;
+
+        const option = INGREDIENT_SUBSTITUTIONS[ingredient.ingredientId]?.find(
+          (candidate) => candidate.substituteId === substituteId,
+        );
+        const substitute = getIngredientById(substituteId);
+        if (!option || !substitute || option.ratio <= 0) return ingredient;
+
+        const amount = scaleAmount(ingredient.amount, option.ratio);
+        return {
+          ...ingredient,
+          ingredientId: substitute.id,
+          amount,
+          unit: substitute.unit,
+          displayAmount: `${formatAmount(amount)} ${substitute.unit}`,
+        };
+      }),
+    }),
+    [activeSwaps, recipe],
   );
+
+  const cost = useMemo(
+    () => calculateRecipeCost(effectiveRecipe, servings, priceSource, overrides),
+    [effectiveRecipe, overrides, priceSource, servings],
+  );
+
+  const swapCount = Object.keys(activeSwaps).length;
+  const originalCost = useMemo(
+    () =>
+      swapCount > 0
+        ? calculateRecipeCost(recipe, servings, priceSource, overrides)
+        : null,
+    [overrides, priceSource, recipe, servings, swapCount],
+  );
+  const swapSavings = originalCost
+    ? roundToTwoDecimals(
+        originalCost.estimatedPalengkeOutOfPocket - cost.estimatedPalengkeOutOfPocket,
+      )
+    : 0;
+
+  const effectiveCheckedIds = useMemo(
+    () =>
+      recipe.ingredients.flatMap((ingredient) =>
+        checkedIds.has(ingredient.ingredientId)
+          ? [activeSwaps[ingredient.ingredientId] ?? ingredient.ingredientId]
+          : [],
+      ),
+    [activeSwaps, checkedIds, recipe.ingredients],
+  );
+
   const { isSaved, toggleSaved, isHydrated } = useSavedUlam();
   const saved = isSaved(recipe.slug);
 
@@ -56,6 +125,18 @@ export function RecipeDetailClient({
   };
 
   const resetChecklist = () => setCheckedIds(new Set());
+
+  const selectSwap = (ingredientId: string, substituteId: string) => {
+    setActiveSwaps((current) => ({ ...current, [ingredientId]: substituteId }));
+  };
+
+  const revertSwap = (ingredientId: string) => {
+    setActiveSwaps((current) => {
+      const next = { ...current };
+      delete next[ingredientId];
+      return next;
+    });
+  };
 
   return (
     <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)]">
@@ -148,6 +229,25 @@ export function RecipeDetailClient({
               <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-adobo">
                 {cost.budgetTier}
               </span>
+              {overrideCount > 0 ? (
+                <span className="rounded-full bg-calamansi px-3 py-1 text-xs font-bold text-white">
+                  My Palengke prices
+                </span>
+              ) : null}
+              {swapCount > 0 ? (
+                <span
+                  aria-live="polite"
+                  className={`rounded-full px-3 py-1 text-xs font-bold ${
+                    swapSavings >= 0 ? "bg-calamansi text-white" : "bg-adobo-soft text-adobo-dark"
+                  }`}
+                >
+                  {swapSavings > 0
+                    ? `Pamalit active: Saves ${formatPHP(swapSavings)}`
+                    : swapSavings < 0
+                      ? `Pamalit active: Adds ${formatPHP(Math.abs(swapSavings))}`
+                      : "Pamalit active: No cost change"}
+                </span>
+              ) : null}
             </div>
           </div>
 
@@ -247,7 +347,13 @@ export function RecipeDetailClient({
             <div className="flex flex-wrap items-center gap-2">
               <CopyListButton
                 getText={() =>
-                  formatRecipePalengkeText(recipe, servings, [...checkedIds], priceSource)
+                  formatRecipePalengkeText(
+                    effectiveRecipe,
+                    servings,
+                    effectiveCheckedIds,
+                    priceSource,
+                    overrides,
+                  )
                 }
                 label={isSupermarket ? "Copy Supermarket List" : "Copy Palengke List"}
                 className="text-xs"
@@ -267,59 +373,133 @@ export function RecipeDetailClient({
           <p className="mt-1 text-xs text-charcoal/75">Tap items as you shop or prep.</p>
 
           <div className="mt-3 divide-y divide-charcoal/10">
-            {cost.ingredients.map((item) => {
-              const checkboxId = `${recipe.slug}-${item.ingredientId}`;
-              const checked = checkedIds.has(item.ingredientId);
+            {cost.ingredients.map((item, index) => {
+              const original = recipe.ingredients[index];
+              const originalId = original.ingredientId;
+              const originalName = getIngredientById(originalId)?.name ?? originalId;
+              const checkboxId = `${recipe.slug}-${originalId}`;
+              const checked = checkedIds.has(originalId);
+              const substitutions = INGREDIENT_SUBSTITUTIONS[originalId];
+              const activeOption = substitutions?.find(
+                (option) => option.substituteId === activeSwaps[originalId],
+              );
+              const tipId = `${swapIdPrefix}-${originalId}-tip`;
 
               return (
-                <div key={item.ingredientId} className="flex items-start gap-3 py-2.5">
-                  <input
-                    id={checkboxId}
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => toggleIngredient(item.ingredientId)}
-                    className="mt-1 h-5 w-5 shrink-0 cursor-pointer rounded border-charcoal/30 accent-adobo"
-                  />
-                  <label
-                    htmlFor={checkboxId}
-                    className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-start justify-between gap-3 py-1"
-                  >
-                    <span className="min-w-0">
-                      <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <div key={originalId} className="py-2.5">
+                  <div className="flex items-start gap-3">
+                    <input
+                      id={checkboxId}
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleIngredient(originalId)}
+                      className="mt-1 h-5 w-5 shrink-0 cursor-pointer rounded border-charcoal/30 accent-adobo"
+                    />
+                    <label
+                      htmlFor={checkboxId}
+                      className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-start justify-between gap-3 py-1"
+                    >
+                      <span className="min-w-0">
+                        <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                          <span
+                            className={`text-sm font-extrabold text-adobo ${
+                              checked ? "text-charcoal/75 line-through decoration-charcoal/30" : ""
+                            }`}
+                          >
+                            {formatAmount(item.amount)} {item.unit}
+                          </span>
+                          <span
+                            className={`text-sm font-semibold leading-snug ${
+                              checked ? "text-charcoal/75 line-through decoration-charcoal/30" : ""
+                            }`}
+                          >
+                            {item.name}
+                          </span>
+                        </span>
+                        <span className="mt-1 block text-[11px] leading-snug text-charcoal/75">
+                          {item.displayAmount} ·{" "}
+                          {isSupermarket ? "Supermarket pack" : "Palengke ref"}: {item.palengkePackLabel}
+                          {item.packsNeeded > 1 ? ` × ${item.packsNeeded}` : ""}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-right">
                         <span
-                          className={`text-sm font-extrabold text-adobo ${
+                          className={`block text-sm font-bold ${
                             checked ? "text-charcoal/75 line-through decoration-charcoal/30" : ""
                           }`}
                         >
-                          {formatAmount(item.amount)} {item.unit}
+                          {formatPHP(item.exactCost, { forceDecimals: true })}
                         </span>
-                        <span
-                          className={`text-sm font-semibold leading-snug ${
-                            checked ? "text-charcoal/75 line-through decoration-charcoal/30" : ""
+                        <span className="mt-0.5 block text-[10px] font-semibold text-adobo-dark">
+                          buy {formatPHP(item.outOfPocketCost)}
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+
+                  {substitutions ? (
+                    <div className="ml-8 mt-2">
+                      <details className="group">
+                        <summary
+                          aria-label={
+                            activeOption
+                              ? `Pamalit, ${activeOption.label}, options for ${originalName}`
+                              : `Pamalit options for ${originalName}`
+                          }
+                          className={`inline-flex min-h-8 cursor-pointer list-none items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold transition-colors ${
+                            activeOption
+                              ? "border-adobo bg-adobo-soft text-adobo-dark"
+                              : "border-adobo/20 bg-white text-adobo hover:border-adobo hover:bg-adobo-soft"
                           }`}
                         >
-                          {item.name}
-                        </span>
-                      </span>
-                      <span className="mt-1 block text-[11px] leading-snug text-charcoal/75">
-                        {item.displayAmount} ·{" "}
-                        {isSupermarket ? "Supermarket pack" : "Palengke ref"}: {item.palengkePackLabel}
-                        {item.packsNeeded > 1 ? ` × ${item.packsNeeded}` : ""}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-right">
-                      <span
-                        className={`block text-sm font-bold ${
-                          checked ? "text-charcoal/75 line-through decoration-charcoal/30" : ""
-                        }`}
-                      >
-                        {formatPHP(item.exactCost, { forceDecimals: true })}
-                      </span>
-                      <span className="mt-0.5 block text-[10px] font-semibold text-adobo-dark">
-                        buy {formatPHP(item.outOfPocketCost)}
-                      </span>
-                    </span>
-                  </label>
+                          <ArrowLeftRight size={13} aria-hidden="true" />
+                          Pamalit
+                        </summary>
+                        <div className="mt-2 rounded-xl border border-adobo/15 bg-cream/60 p-3">
+                          <fieldset>
+                            <legend className="text-[11px] font-bold uppercase tracking-[0.12em] text-adobo">
+                              Swap {originalName}
+                            </legend>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {substitutions.map((option) => {
+                                const isActive = activeOption?.substituteId === option.substituteId;
+                                return (
+                                  <button
+                                    key={option.substituteId}
+                                    type="button"
+                                    aria-pressed={isActive}
+                                    aria-describedby={isActive ? tipId : undefined}
+                                    onClick={() => selectSwap(originalId, option.substituteId)}
+                                    className={`inline-flex min-h-9 items-center rounded-full border px-3 text-xs font-bold transition-colors ${
+                                      isActive
+                                        ? "border-adobo bg-adobo text-white"
+                                        : "border-adobo/20 bg-white text-charcoal/75 hover:border-adobo/50 hover:text-adobo"
+                                    }`}
+                                  >
+                                    {option.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </fieldset>
+                          <p id={tipId} className="mt-2 text-[11px] leading-snug text-charcoal/75">
+                            {activeOption?.note ??
+                              "Choose a substitute to update the cost and see a cooking tip."}
+                          </p>
+                          {activeOption ? (
+                            <button
+                              type="button"
+                              onClick={() => revertSwap(originalId)}
+                              className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-charcoal/15 px-3 text-xs font-bold text-charcoal/75 transition-colors hover:border-adobo/40 hover:text-adobo"
+                            >
+                              <RotateCcw size={12} aria-hidden="true" />
+                              Revert
+                            </button>
+                          ) : null}
+                        </div>
+                      </details>
+                    </div>
+                  ) : null}
                 </div>
               );
             })}

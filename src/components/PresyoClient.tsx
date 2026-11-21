@@ -1,10 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useMemo, useState } from "react";
-import { RotateCcw, Search, UtensilsCrossed, Wallet } from "lucide-react";
+import { useId, useMemo, useState, type FormEvent } from "react";
+import { Pencil, RotateCcw, Search, UtensilsCrossed, Wallet } from "lucide-react";
+import { usePriceOverrides } from "@/hooks/usePriceOverrides";
 import { usePriceSource } from "@/hooks/usePriceSource";
-import { applyPriceSource, formatPHP, type PriceSource } from "@/lib/costCalculator";
+import {
+  applyPriceSource,
+  formatPHP,
+  resolveIngredient,
+  type PriceSource,
+} from "@/lib/costCalculator";
 import type { Ingredient, IngredientCategory, IngredientUnit, Recipe } from "@/types/recipe";
 
 const categoryFilters: readonly ("All" | IngredientCategory)[] = [
@@ -24,6 +30,11 @@ const unitLabels: Record<IngredientUnit, string> = {
   sachet: "sachet",
 };
 
+function packDescriptor(label: string): string {
+  const separatorIndex = label.indexOf("—");
+  return separatorIndex === -1 ? label : label.slice(0, separatorIndex).trim();
+}
+
 interface IngredientUsage {
   count: number;
   firstRecipe: Recipe | undefined;
@@ -40,15 +51,51 @@ function IngredientCard({
   lastUpdated,
   usage,
   priceSource,
+  override,
+  isHydrated,
+  setIngredientPrice,
+  resetIngredientPrice,
 }: {
   ingredient: Ingredient;
   lastUpdated: string;
   usage: IngredientUsage;
   priceSource: PriceSource;
+  override: number | undefined;
+  isHydrated: boolean;
+  setIngredientPrice: (ingredientId: string, price: number) => void;
+  resetIngredientPrice: (ingredientId: string) => void;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftPrice, setDraftPrice] = useState("");
+  const priceInputId = useId();
   const isSupermarket = priceSource === "supermarket";
-  const packPrice = applyPriceSource(ingredient.palengkePackPrice, priceSource);
-  const unitPrice = applyPriceSource(ingredient.pricePerUnit, priceSource);
+  const hasOverride = override !== undefined;
+  const resolved =
+    resolveIngredient(
+      ingredient.id,
+      override === undefined ? {} : { [ingredient.id]: override },
+    ) ?? ingredient;
+  const packPrice = applyPriceSource(resolved.palengkePackPrice, priceSource);
+  const unitPrice = applyPriceSource(resolved.pricePerUnit, priceSource);
+
+  function handleEdit() {
+    setDraftPrice(String(resolved.palengkePackPrice));
+    setIsEditing(true);
+  }
+
+  function handleSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const parsed = Number(draftPrice);
+    if (!Number.isFinite(parsed) || parsed <= 0) return;
+
+    setIngredientPrice(ingredient.id, parsed);
+    setIsEditing(false);
+  }
+
+  function handleReset() {
+    resetIngredientPrice(ingredient.id);
+    setIsEditing(false);
+  }
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-charcoal/10 bg-white shadow-card">
@@ -60,6 +107,11 @@ function IngredientCard({
           <h3 className="mt-1 text-lg font-extrabold leading-tight tracking-tight text-charcoal">
             {ingredient.name}
           </h3>
+          {hasOverride ? (
+            <span className="mt-1.5 inline-flex rounded-full bg-calamansi px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
+              My Palengke
+            </span>
+          ) : null}
         </div>
 
         {usage.count > 0 && usage.firstRecipe ? (
@@ -89,8 +141,16 @@ function IngredientCard({
             {formatPHP(packPrice)}
           </p>
           <p className="mt-1 text-xs font-semibold leading-snug text-charcoal/75">
-            {ingredient.palengkePackLabel}
+            {hasOverride ? packDescriptor(ingredient.palengkePackLabel) : ingredient.palengkePackLabel}
           </p>
+          {hasOverride ? (
+            <p className="mt-1 text-[11px] font-semibold text-adobo-dark">
+              Metro Manila baseline:{" "}
+              <span className="line-through text-charcoal/60">
+                {formatPHP(ingredient.palengkePackPrice)}
+              </span>
+            </p>
+          ) : null}
         </div>
 
         <div className="rounded-xl border border-calamansi/15 bg-calamansi-soft/40 p-3">
@@ -107,10 +167,78 @@ function IngredientCard({
         </div>
       </div>
 
-      <footer className="flex items-center gap-1.5 border-t border-charcoal/10 px-4 py-3 text-[11px] font-medium text-charcoal/75 sm:px-5">
-        <Wallet size={13} aria-hidden="true" />
-        Metro Manila reference · {lastUpdated}
+      <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-charcoal/10 px-4 py-3 text-[11px] font-medium text-charcoal/75 sm:px-5">
+        <span className="inline-flex items-center gap-1.5">
+          <Wallet size={13} aria-hidden="true" />
+          {hasOverride ? "Saved on this device" : `Metro Manila reference · ${lastUpdated}`}
+        </span>
+        <button
+          type="button"
+          disabled={!isHydrated}
+          onClick={handleEdit}
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-adobo/20 bg-white px-3 font-bold text-adobo transition-colors hover:border-adobo hover:bg-adobo-soft disabled:cursor-wait disabled:opacity-60"
+        >
+          <Pencil size={13} aria-hidden="true" />
+          Edit
+        </button>
       </footer>
+
+      {isEditing ? (
+        <form
+          onSubmit={handleSave}
+          className="border-t border-adobo/10 bg-adobo-soft/40 px-4 py-4 sm:px-5"
+        >
+          <label
+            htmlFor={priceInputId}
+            className="block text-[10px] font-bold uppercase tracking-[0.12em] text-adobo-dark"
+          >
+            My palengke pack price
+          </label>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-charcoal/75">
+              {packDescriptor(ingredient.palengkePackLabel)}
+            </span>
+            <div className="flex min-h-11 items-center gap-1 rounded-xl border border-charcoal/15 bg-white px-3">
+              <span aria-hidden="true" className="font-black text-adobo">
+                ₱
+              </span>
+              <input
+                id={priceInputId}
+                type="number"
+                min="0.01"
+                step="0.01"
+                inputMode="decimal"
+                value={draftPrice}
+                onChange={(event) => setDraftPrice(event.target.value)}
+                required
+                className="w-24 bg-transparent text-base font-bold text-charcoal outline-none"
+              />
+            </div>
+            <button
+              type="submit"
+              className="inline-flex min-h-11 items-center rounded-full bg-adobo px-4 text-xs font-bold text-white transition-colors hover:bg-adobo-dark"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsEditing(false)}
+              className="inline-flex min-h-11 items-center rounded-full border border-charcoal/15 bg-white px-3 text-xs font-bold text-charcoal/75 transition-colors hover:border-adobo hover:text-adobo"
+            >
+              Cancel
+            </button>
+            {hasOverride ? (
+              <button
+                type="button"
+                onClick={handleReset}
+                className="inline-flex min-h-11 items-center rounded-full border border-calamansi/30 bg-white px-3 text-xs font-bold text-calamansi transition-colors hover:bg-calamansi-soft"
+              >
+                Reset item
+              </button>
+            ) : null}
+          </div>
+        </form>
+      ) : null}
     </article>
   );
 }
@@ -119,6 +247,14 @@ export function PresyoClient({ ingredients, lastUpdated, recipes }: PresyoClient
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("All");
   const { priceSource, isSupermarket } = usePriceSource();
+  const {
+    overrides,
+    setIngredientPrice,
+    resetIngredientPrice,
+    resetAllPrices,
+    overrideCount,
+    isHydrated,
+  } = usePriceOverrides();
   const searchId = useId();
   const filtersHeadingId = useId();
   const categoryLegendId = useId();
@@ -236,6 +372,22 @@ export function PresyoClient({ ingredients, lastUpdated, recipes }: PresyoClient
         </form>
       </search>
 
+      {isHydrated && overrideCount > 0 ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-calamansi/25 bg-calamansi-soft px-4 py-2">
+          <p className="text-xs font-bold text-calamansi">
+            {overrideCount} ingredient price{overrideCount === 1 ? "" : "s"} set to your palengke.
+          </p>
+          <button
+            type="button"
+            onClick={resetAllPrices}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-calamansi/30 bg-white px-3 py-1.5 text-xs font-bold text-calamansi transition-colors hover:border-calamansi"
+          >
+            <RotateCcw size={14} aria-hidden="true" />
+            Reset All to Metro Manila Defaults
+          </button>
+        </div>
+      ) : null}
+
       {isSupermarket ? (
         <p className="mt-4 rounded-xl border border-adobo/15 bg-adobo-soft/60 px-4 py-2 text-xs font-semibold text-adobo-dark">
           Supermarket estimate active: reference prices include the +15% grocery markup.
@@ -283,6 +435,10 @@ export function PresyoClient({ ingredients, lastUpdated, recipes }: PresyoClient
                       lastUpdated={lastUpdated}
                       usage={usageByIngredientId.get(ingredient.id) ?? { count: 0, firstRecipe: undefined }}
                       priceSource={priceSource}
+                      override={overrides[ingredient.id]}
+                      isHydrated={isHydrated}
+                      setIngredientPrice={setIngredientPrice}
+                      resetIngredientPrice={resetIngredientPrice}
                     />
                   </li>
                 ))}

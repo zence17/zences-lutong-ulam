@@ -3,7 +3,7 @@
 import { useId } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bookmark, BookOpen, CalendarDays, ChefHat, Wallet } from "lucide-react";
+import { Bookmark, BookOpen, CalendarDays, ChefHat, ShoppingBasket, Wallet } from "lucide-react";
 import { usePriceSource } from "@/hooks/usePriceSource";
 import { requestSavedUlamFilter, useSavedUlam } from "@/hooks/useSavedUlam";
 
@@ -15,6 +15,7 @@ export function Navbar() {
   const recipesActive = pathname.startsWith("/recipes");
   const mealPlanActive = pathname === "/meal-plan";
   const presyoActive = pathname === "/presyo";
+  const negosyoActive = pathname === "/negosyo";
 
   return (
     <header className="no-print sticky top-0 z-30 border-b border-adobo/15 bg-cream/95 backdrop-blur">
@@ -69,6 +70,17 @@ export function Navbar() {
           >
             <Wallet size={16} aria-hidden="true" />
             <span className="hidden sm:inline">Presyong Palengke</span>
+          </Link>
+          <Link
+            href="/negosyo"
+            aria-label="Negosyo"
+            aria-current={negosyoActive ? "page" : undefined}
+            className={`inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-full px-3 py-2 transition-colors hover:bg-adobo-soft hover:text-adobo-dark ${
+              negosyoActive ? "bg-adobo-soft text-adobo-dark" : "text-charcoal"
+            }`}
+          >
+            <ShoppingBasket size={16} aria-hidden="true" />
+            <span className="hidden sm:inline">Negosyo</span>
           </Link>
           <Link
             href="/?saved=1"
