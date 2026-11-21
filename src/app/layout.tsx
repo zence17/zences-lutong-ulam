@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Footer } from "@/components/Footer";
 import { Navbar } from "@/components/Navbar";
+import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import "./globals.css";
 
 const siteName = "Zence's Lutong Ulam";
@@ -56,6 +57,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         >
           Skip to main content
         </a>
+        <ServiceWorkerRegistrar />
         <Navbar />
         <main id="main-content" tabIndex={-1}>
           {children}

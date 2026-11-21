@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bookmark, BookOpen, CalendarDays, ChefHat, ShoppingBasket, Wallet } from "lucide-react";
@@ -16,6 +16,20 @@ export function Navbar() {
   const mealPlanActive = pathname === "/meal-plan";
   const presyoActive = pathname === "/presyo";
   const negosyoActive = pathname === "/negosyo";
+  const [isOnline, setIsOnline] = useState(true);
+  const [onlineStatusReady, setOnlineStatusReady] = useState(false);
+
+  useEffect(() => {
+    const update = () => setIsOnline(navigator.onLine);
+    update();
+    setOnlineStatusReady(true);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
 
   return (
     <header className="no-print sticky top-0 z-30 border-b border-adobo/15 bg-cream/95 backdrop-blur">
@@ -101,7 +115,20 @@ export function Navbar() {
           </Link>
         </nav>
 
-        <div className="order-3 flex w-full justify-end lg:order-none lg:w-auto lg:justify-start">
+        <div className="order-3 flex w-full items-center justify-end gap-2 lg:order-none lg:w-auto lg:justify-start">
+          {onlineStatusReady ? (
+            <span
+              role="status"
+              aria-live="polite"
+              className={`inline-flex min-h-11 items-center rounded-full border px-3 py-1.5 text-xs font-extrabold ${
+                isOnline
+                  ? "border-calamansi/30 bg-calamansi/10 text-calamansi"
+                  : "border-charcoal/15 bg-charcoal/5 text-charcoal/80"
+              }`}
+            >
+              {isOnline ? "Offline Ready" : "Offline Mode"}
+            </span>
+          ) : null}
           <fieldset
             aria-busy={!isPriceSourceHydrated}
             className="inline-flex max-w-full flex-wrap items-center justify-end gap-0.5 rounded-full border border-charcoal/10 bg-white p-0.5 shadow-card"
