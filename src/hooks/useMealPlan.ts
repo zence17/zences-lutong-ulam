@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { recipes } from "@/data/recipes";
 import { STORAGE_KEYS, SYNC_EVENTS } from "@/lib/backupStorage";
 import { DAYS_OF_WEEK, calculateRecipeCost, roundToTwoDecimals } from "@/lib/costCalculator";
-import type { DayOfWeek, WeeklyMealPlan } from "@/lib/costCalculator";
+import type { DayOfWeek, PriceOverrides, PriceSource, WeeklyMealPlan } from "@/lib/costCalculator";
 import type { Recipe, RecipeCategory } from "@/types/recipe";
 
 const STORAGE_KEY = STORAGE_KEYS.mealPlan;
@@ -111,11 +111,16 @@ function readStoredState(
   }
 }
 
-function buildTipidSlugs(availableRecipes: Recipe[]): string[] {
+function buildTipidSlugs(
+  availableRecipes: Recipe[],
+  priceSource: PriceSource,
+  overrides: PriceOverrides,
+): string[] {
   const ranked = [...availableRecipes]
     .map((recipe) => ({
       recipe,
-      costPerServing: calculateRecipeCost(recipe, recipe.baseServings).costPerServing,
+      costPerServing: calculateRecipeCost(recipe, recipe.baseServings, priceSource, overrides)
+        .costPerServing,
     }))
     .sort((a, b) => a.costPerServing - b.costPerServing);
 
@@ -141,7 +146,11 @@ function buildTipidSlugs(availableRecipes: Recipe[]): string[] {
   return picked;
 }
 
-export function useMealPlan(availableRecipes: Recipe[] = recipes): UseMealPlanResult {
+export function useMealPlan(
+  availableRecipes: Recipe[] = recipes,
+  priceSource: PriceSource = "palengke",
+  overrides: PriceOverrides = {},
+): UseMealPlanResult {
   const [plan, setPlan] = useState<WeeklyMealPlan>(createEmptyPlan);
   const [servings, setServingsState] = useState(DEFAULT_SERVINGS);
   const [weeklyBudget, setWeeklyBudgetState] = useState(DEFAULT_WEEKLY_BUDGET);
@@ -208,13 +217,13 @@ export function useMealPlan(availableRecipes: Recipe[] = recipes): UseMealPlanRe
   }, []);
 
   const autoFillTipidWeek = useCallback(() => {
-    const tipidSlugs = buildTipidSlugs(availableRecipes);
+    const tipidSlugs = buildTipidSlugs(availableRecipes, priceSource, overrides);
     const next = createEmptyPlan();
     DAYS_OF_WEEK.forEach((day, index) => {
       next[day] = tipidSlugs[index] ?? null;
     });
     setPlan(next);
-  }, [availableRecipes]);
+  }, [availableRecipes, overrides, priceSource]);
 
   const clearWeek = useCallback(() => {
     setPlan(createEmptyPlan());

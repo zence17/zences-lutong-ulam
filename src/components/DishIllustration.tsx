@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useId, useState, type ReactElement } from "react";
+import Image from "next/image";
+import { isSafeImageSrc } from "@/lib/backupStorage";
 import type { RecipeCategory } from "@/types/recipe";
 
 interface DishIllustrationProps {
@@ -247,14 +249,16 @@ export function DishIllustration({
 
   return (
     <div className={`relative w-full overflow-hidden ${heightClass}`}>
-      {image && !imgError ? (
+      {image && isSafeImageSrc(image) && !imgError ? (
         <>
-          <img
+          <Image
             src={image}
             alt={alt ?? `${category} dish`}
-            loading="lazy"
             width={400}
             height={160}
+            loading={variant === "hero" ? undefined : "lazy"}
+            priority={variant === "hero"}
+            unoptimized
             onError={() => setImgError(true)}
             className="h-full w-full object-cover"
           />

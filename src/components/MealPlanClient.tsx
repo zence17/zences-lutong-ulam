@@ -54,6 +54,8 @@ function formatUnitLabel(unit: IngredientUnit, amount: number): string {
 export default function MealPlanClient({ recipes }: MealPlanClientProps) {
   const { customRecipes } = useCustomRecipes();
   const allRecipes = useMemo(() => [...customRecipes, ...recipes], [customRecipes, recipes]);
+  const { priceSource, isSupermarket } = usePriceSource();
+  const { overrides, overrideCount } = usePriceOverrides();
   const {
     plan,
     servings,
@@ -64,9 +66,7 @@ export default function MealPlanClient({ recipes }: MealPlanClientProps) {
     autoFillTipidWeek,
     clearWeek,
     isHydrated,
-  } = useMealPlan(allRecipes);
-  const { priceSource, isSupermarket } = usePriceSource();
-  const { overrides, overrideCount } = usePriceOverrides();
+  } = useMealPlan(allRecipes, priceSource, overrides);
 
   const [checkedIngredients, setCheckedIngredients] = useState<Set<string>>(
     () => new Set<string>(),
